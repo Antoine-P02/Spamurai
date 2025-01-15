@@ -317,4 +317,5 @@ app.get('/', async (req, res) => {
     console.error('Error fetching emails:', error);
     res.status(500).json({ error: 'Failed to fetch emails' });
   }
+    //res.sendFile(path.join(__dirname, 'index.html'));
 });
