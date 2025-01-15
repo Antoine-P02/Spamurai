@@ -1,42 +1,127 @@
-require('dotenv').config(); 
+require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const config = require('./config');
-const { google } = require('googleapis');
+const Imap = require('imap');
 const OpenAI = require('openai');
 const nodemailer = require('nodemailer');
 const app = express();
 const PORT = config.port || 3000;
 
-app.use('/favicon.ico', express.static(path.join(__dirname, '../public/favicon.ico')));
-app.use(session({
-    secret: 'your_secret_key', // Change this to a random secret key
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false } // Set to true if using HTTPS
-}));
+// IMAP Configuration
+const imapConfig = {
+    user: process.env.EMAIL_USER,
+    password: process.env.APP_PASSWORD,  // App Password from Google Account
+    host: 'imap.gmail.com',
+    port: 993,
+    tls: true,
+    tlsOptions: { rejectUnauthorized: false }
+};
 
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI;
-const APIKEY = process.env.APIKEY;
+const imap = new Imap(imapConfig);
 
-const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+async function fetchLastEmails(count = 5) {
+    return new Promise((resolve, reject) => {
+        imap.once('ready', () => {
+            imap.openBox('INBOX', false, (err, box) => {
+                if (err) reject(err);
+
+                const totalMessages = box.messages.total;
+                const fetch = imap.seq.fetch(`${Math.max(1, totalMessages - count + 1)}:${totalMessages}`, {
+                    bodies: ['HEADER.FIELDS (FROM SUBJECT)', 'TEXT'],
+                    struct: true
+                });
+
+                const emails = [];
+
+                fetch.on('message', (msg) => {
+                    const email = {};
+
+                    msg.on('body', (stream, info) => {
+                        let buffer = '';
+                        stream.on('data', (chunk) => {
+                            buffer += chunk.toString('utf8');
+                        });
+                        stream.on('end', () => {
+                            if (info.which === 'TEXT') {
+                                email.body = buffer;
+                            } else {
+                                email.headers = Imap.parseHeader(buffer);
+                            }
+                        });
+                    });
+
+                    msg.once('end', () => {
+                        emails.push(email);
+                    });
+                });
+
+                fetch.once('error', (err) => {
+                    reject(err);
+                });
+
+                fetch.once('end', () => {
+                    imap.end();
+                    resolve(emails);
+                });
+            });
+        });
+
+        imap.once('error', (err) => {
+            reject(err);
+        });
+
+        imap.connect();
+    });
+}
+
+// Function to check emails periodically
+async function checkEmails() {
+    try {
+        const emails = await fetchLastEmails(5);
+        console.log('\n=== Last 5 Emails ===');
+        emails.forEach((email, index) => {
+            console.log(`\nEmail ${index + 1}:`);
+            console.log(`From: ${email.headers.from}`);
+            console.log(`Subject: ${email.headers.subject}`);
+            console.log(`Body: ${email.body.substring(0, 100)}...`);
+        });
+    } catch (error) {
+        console.error('Error fetching emails:', error);
+    }
+}
+
+// Check emails every 30 seconds
+setInterval(checkEmails, 30000);
+
+// Initial check
+checkEmails();
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
+
 
 const openai = new OpenAI({
-    apiKey: process.env.APIKEY,
+    apiKey: process.env.OPENAI_API_KEY
 });
 
 const completion = openai.chat.completions.create({
     model: "gpt-4o-mini",
     store: true,
-    messages: [
-        { "role": "user", "content": "écris un paragraphe de 10 lignes sur Antoine Priou le clown très moche et très mauvais" },
-    ],
+    messages: [{ role: "user", "content": "écris un paragraphe de 10 lignes sur Antoine Priou le clown très moche et très mauvais" }]
 });
 
-completion.then((result) => console.log(result.choices[0].message));
+completion.then((response) => {
+    console.log(response.choices[0].message);
+});
+
+
+
+
+
+/*
 
 // Configuration du transporteur Nodemailer
 const transporter = nodemailer.createTransport({
@@ -49,17 +134,6 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-/*
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-*/
-
-let isLoggedIn = false; // Variable pour suivre l'état de connexion
-let emailCheckInterval; // Variable pour stocker l'intervalle
 
 // Fonction pour vérifier les nouveaux emails
 async function checkForNewEmails() {
@@ -137,96 +211,6 @@ function stopEmailCheck() {
 }
 
 
-app.get('/login', (req, res) => {
-    const authUrl = oAuth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/gmail.send'],
-    });
-    isLoggedIn = true; 
-    startEmailCheck()
-    console.log("Connexion réussi")
-    res.redirect(authUrl);
-});
-
-app.get('/callback', async (req, res) => {
-    const { code } = req.query;
-    const { tokens } = await oAuth2Client.getToken(code);
-    oAuth2Client.setCredentials(tokens);
-    req.session.tokens = tokens; // Store tokens in session
-    res.redirect('/protected_area');
-});
-
-
-app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <head>
-                <title>Bienvenue sur Spamurai</title>
-            </head>
-            <body>
-                <h1>Whats up la team</h1>
-                <a href="/login">
-                    <button id="loginButton">Login with Google</button>
-                </a>
-            </body>
-        </html>
-    `);
-});
-
-app.get('/protected_area', async (req, res) => {
-    if (!req.session.tokens) {
-        return res.redirect('/login');
-    }
-
-    oAuth2Client.setCredentials(req.session.tokens);
-    const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-
-    try {
-        const response = await gmail.users.messages.list({
-            userId: 'me',
-            labelIds: ['INBOX'],
-            maxResults: 5,
-        });
-
-        const messages = response.data.messages || [];
-        const emailData = [];
-
-        for (const message of messages) {
-            const msg = await gmail.users.messages.get({
-                userId: 'me',
-                id: message.id,
-            });
-            emailData.push(msg.data.snippet);
-        }
-
-        res.send(`
-            <h1>Your Emails:</h1>
-            <ul>
-                ${emailData.map(email => `<li>${email}</li>`).join('')}
-            </ul>
-            <a href="/logout">
-                <button id="logoutButton">Logout</button>
-            </a>
-        `);
-    } catch (error) {
-        console.error('Error fetching emails:', error);
-        res.status(500).send('Error fetching emails');
-    }
-});
-
-app.get('/logout', (req, res) => {
-    req.session.destroy();
-    res.redirect('/');
-    isLoggedIn = false;
-    stopEmailCheck();
-    console.log("Déconnexion réussi")
-});
-
-
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
-
 
 
 
@@ -301,3 +285,5 @@ async function chatgptouille(email,object,content){
     
 }   
 
+
+*/
