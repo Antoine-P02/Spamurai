@@ -92,12 +92,33 @@ async function checkEmails() {
     }
 }
 
-// Check emails every 30 seconds
-setInterval(checkEmails, 30000);
+async function send_email(result, from, subject) {
 
-// Initial check
-checkEmails();
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.APP_PASSWORD
+        }
+    });
 
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: from,
+        subject: `Phishing Test : ${subject}`,
+        text: ` Résultat : \n ${result}`
+    };
+
+    try {
+        const response = await transporter.sendMail(mailOptions);
+        console.log('Email envoyé avec succès:', response);
+        return response;
+    } catch (error) {
+        console.error('Erreur lors de l\'envoi de l\'email:', error);
+        throw new Error('Erreur lors de l\'envoi de l\'email: ' + error.toString());
+    }
+
+}
 
 app.use(express.static(path.join(__dirname)));
 
@@ -297,10 +318,7 @@ async function chatgptouille(email,object,content){
 
 */
 
-// Handle 404 errors
-app.use((req, res) => {
-    res.status(404).send('404: Page not found');
-});
+
 
 // Handle other errors
 app.use((err, req, res, next) => {
@@ -310,12 +328,35 @@ app.use((err, req, res, next) => {
 
 // Replace the setInterval with an API endpoint
 app.get('/', async (req, res) => {
-  try {
-    const emails = await fetchLastEmails(5);
-    res.json(emails);
-  } catch (error) {
-    console.error('Error fetching emails:', error);
-    res.status(500).json({ error: 'Failed to fetch emails' });
-  }
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+
+app.get('/api/get/emails', async (req, res) => {
+    try {
+        const emails = await fetchLastEmails(5);
+        console.log("Emails fetched successfully" + emails);
+        res.send("Emails fetched successfully" + emails);
+    } 
+    catch (error) {
+        console.error('Error fetching emails:', error);
+        res.send("Error fetching emails : " + error.message);
+    }
+});
+
+app.get('/api/post/emails', async (req, res) => {
+    try {
+        const result = await send_email("allo", process.env.EMAIL_USER, "test1");
+        console.log("Email sent successfully");
+        res.send("Email sent successfully" + result.response);
+    } catch (error) {
+        console.error('Error sending email:', error);
+        res.send("Error sending email : " + error.message);
+    }
+});
+
+
+// Handle 404 errors
+app.use((req, res) => {
+    res.status(404).send('404: Page not found');
 });

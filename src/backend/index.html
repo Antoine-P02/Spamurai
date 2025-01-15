@@ -7,8 +7,10 @@
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
 <body>
-    <h1>BACKEND Welcome to Spamurai Team Admin Page!</h1>
-    <button>Fetch Emails</button>
+    <h1>Welcome to Spamurai Admin Page!</h1>
+    <button onclick="window.location.href='/api/get/emails'">Get Emails</button>
+    <button onclick="window.location.href='/api/post/emails'">Post Emails</button>
+    <button onclick="window.location.href='/api/post/delete'">Delete Emails</button>
     <div id="emails"></div>
 </body>
 </html> 
