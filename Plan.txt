@@ -1,0 +1,40 @@
+S => 22007315 Stanislas Fouché 
+A => 22008452 Antoine Priou 
+B => Both S & A 
+
+Tech stack : node.js, gmail with oauth, open ai api key and vue for frontend, all hosted on a free host like vercel
+
+xxx | créer Mail 
+xxx | app.py : Lit les 5 derniers mails (variable) pour Récupérer les données ( Objet, Contenu, mail, (pièce jointe))  
+xxx | déterminer la techno à utiliser {}
+xxx | trouver où héberger l'appli (au pire vercel) {}
+xxx | branche locale {}
+xxx | détecter les nouveaux mails automatiquement
+xxx | changer les mails "non-lu" en "lu"
+xxx | Renvoyer un mail à l'utilisateur
+xxx | send query response from openAI api to user {}
+xxx | renvoyer un mail avec un taux de certitude à l'utilisateur
+
+_B_ | setup clé Api OpenIA (gpt 4 o) {
+    - version gratuite en marche 
+}
+
+_A_ | auto login
+___ | Add password required for admin page
+
+___ | prompt
+___ | mettre une liste des adresses mails connues et des no-reply 
+___ | prendre une base de données phishing ( normaux et malveillants) 
+___ | faire en sorte que le mail n'aille pas dans les spams / désactiver les spams spamurai
+___ | page admin avec historique des demandes
+
+
+??? | LLM ? 
+??? | vérifie les informations, vérifier les liens    
+??? | savoir comment font les boites mail pour déterminer si un mail est un spam ou non 
+??? | metric,etc
+??? | récuperer les polices et les ponctuations 
+??? | finir état de l’art
+
+
+
