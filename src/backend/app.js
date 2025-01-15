@@ -98,6 +98,13 @@ setInterval(checkEmails, 30000);
 // Initial check
 checkEmails();
 
+
+app.use(express.static(path.join(__dirname)));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
@@ -287,3 +294,14 @@ async function chatgptouille(email,object,content){
 
 
 */
+
+// Handle 404 errors
+app.use((req, res) => {
+    res.status(404).send('404: Page not found');
+});
+
+// Handle other errors
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('500: Something broke!');
+});
