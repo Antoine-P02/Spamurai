@@ -307,7 +307,7 @@ app.use((err, req, res, next) => {
 });
 
 // Replace the setInterval with an API endpoint
-app.get('/api/check-emails', async (req, res) => {
+app.get('/', async (req, res) => {
   try {
     const emails = await fetchLastEmails(5);
     res.json(emails);
