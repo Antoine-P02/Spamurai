@@ -305,3 +305,14 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send('500: Something broke!');
 });
+
+// Replace the setInterval with an API endpoint
+app.get('/api/check-emails', async (req, res) => {
+  try {
+    const emails = await fetchLastEmails(5);
+    res.json(emails);
+  } catch (error) {
+    console.error('Error fetching emails:', error);
+    res.status(500).json({ error: 'Failed to fetch emails' });
+  }
+});
