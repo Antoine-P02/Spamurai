@@ -355,6 +355,14 @@ app.get('/api/post/emails', async (req, res) => {
     }
 });
 
+app.get('api/get/notif', async (req, res) => {
+    try {
+        console.log("OMGGGGGGGGGGGGGGGGGGGG it works", req, res);
+    } catch (error) {
+        console.error('Error fetching notif:', error);
+    }
+});
+
 
 // Handle 404 errors
 app.use((req, res) => {
