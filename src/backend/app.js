@@ -357,9 +357,13 @@ app.get('/api/post/emails', async (req, res) => {
 
 app.get('api/get/notif', async (req, res) => {
     try {
-        console.log("OMGGGGGGGGGGGGGGGGGGGG it works", req, res);
-    } catch (error) {
-        console.error('Error fetching notif:', error);
+        const emails = await fetchLastEmails(5);
+        console.log("omgggggggg" + emails);
+        res.send("omgggggggg" + emails);
+    }
+    catch (error) {
+        console.error('big ff:', error);
+        res.send("big ff : " + error.message);
     }
 });
 
