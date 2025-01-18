@@ -355,7 +355,7 @@ app.get('/api/post/emails', async (req, res) => {
     }
 });
 
-app.get('/api/get/notif', async (req, res) => {
+app.post('/api/get/notif', async (req, res) => {
     try {
         const emails = await fetchLastEmails(5);
         console.log("omgggggggg" + emails);
