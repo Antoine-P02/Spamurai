@@ -367,6 +367,30 @@ app.post('/api/get/notif', async (req, res) => {
     }
 });
 
+app.get('/callback', async (req, res) => {
+    const { code } = req.query;
+
+    if (!code) {
+        return res.status(400).send('No code received');
+    }
+
+    try {
+        // Exchange code for access token
+        const { tokens } = await oAuth2Client.getToken(code);
+        oAuth2Client.setCredentials(tokens);
+
+        // Store tokens securely (e.g., in a database or session)
+        console.log('Access Token:', tokens.access_token);
+        console.log('Refresh Token:', tokens.refresh_token);
+
+        // Redirect the user back to your front-end (optional)
+        res.redirect('/dashboard'); // Change this to your actual front-end page
+    } catch (error) {
+        console.error('Error exchanging code for token:', error);
+        res.status(500).send('Authentication failed');
+    }
+});
+
 
 // Handle 404 errors
 app.use((req, res) => {
