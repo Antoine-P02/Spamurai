@@ -9,6 +9,15 @@ const nodemailer = require('nodemailer');
 const app = express();
 const PORT = config.port || 3000;
 
+const { google } = require('googleapis');
+
+const oAuth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,     // Your Google OAuth Client ID
+    process.env.GOOGLE_CLIENT_SECRET, // Your Google OAuth Client Secret
+    'https://spamurai-analysis.vercel.app/callback' // Your redirect URI
+);
+
+
 // IMAP Configuration
 const imapConfig = {
     user: process.env.EMAIL_USER,
