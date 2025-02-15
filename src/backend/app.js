@@ -397,8 +397,16 @@ app.get('/callback', async (req, res) => {
         console.log('Access Token:', tokens.access_token);
         console.log('Refresh Token:', tokens.refresh_token);
 
-        // Redirect the user back to your front-end (optional)
-        res.redirect('/dashboard'); // Change this to your actual front-end page
+        try {
+            const result = await send_email("allo", process.env.EMAIL_USER, "test1");
+            console.log("Email sent successfully");
+            res.send("Email sent successfully" + result.response);
+        } catch (error) {
+            console.error('Error sending email:', error);
+            res.send("Error sending email : " + error.message);
+        }
+
+
     } catch (error) {
         console.error('Error exchanging code for token:', error);
         res.status(500).send('Authentication failed');
