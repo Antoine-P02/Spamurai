@@ -378,6 +378,11 @@ app.post('/api/get/notif', async (req, res) => {
 
 app.get('/callback', async (req, res) => {
     const { code } = req.query;
+    console.log("Debug :");
+    console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
+    console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET);
+    console.log('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL);
+
 
     if (!code) {
         return res.status(400).send('No code received');
