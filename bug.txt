@@ -1,0 +1,4 @@
+Erreur corrigé :  non fermeture de l'écouteur précedent imap, peux entrainer des pertes de mémoire --> enlever l'init globale imap au début et en recréer un à chaque relancement du code
+
+(node:7524) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [Connection]. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)

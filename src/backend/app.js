@@ -25,29 +25,41 @@ const imapConfig = {
 const imap = new Imap(imapConfig);
 
 async function fetchAllUnreadEmails() {
+
+    const imap = new Imap(imapConfig);
+
     return new Promise((resolve, reject) => {
+
         imap.once('ready', () => {
             imap.openBox('INBOX', false, (err, box) => {
-                if (err) return reject(err);
+                if (err) {
+                    imap.end();
+                    return reject(err);
+                }
 
-                // Rechercher uniquement les e-mails non lus (UNSEEN)
                 imap.search(['UNSEEN'], (err, results) => {
-                    if (err) return reject(err);
+                    if (err) {
+                        imap.end();
+                        return reject(err);
+                    }
 
                     if (results.length === 0) {
                         imap.end();
-                        return resolve([]); // Aucun e-mail non lu
+                        return resolve([]);
                     }
 
+                    const emails = [];
                     const fetch = imap.fetch(results, {
                         bodies: ['HEADER.FIELDS (FROM SUBJECT)', 'TEXT'],
                         struct: true
                     });
 
-                    const emails = [];
+                    fetch.on('message', (msg, seqno) => {
+                        let email = { seqno };
 
-                    fetch.on('message', (msg) => {
-                        const email = {};
+                        msg.on('attributes', (attrs) => {
+                            email.uid = attrs.uid;
+                        });
 
                         msg.on('body', (stream, info) => {
                             let buffer = '';
@@ -65,10 +77,14 @@ async function fetchAllUnreadEmails() {
 
                         msg.once('end', () => {
                             emails.push(email);
+                            imap.addFlags(email.uid, ['\\Seen'], (err) => {
+                                if (err) console.error(`Erreur marquage UID ${email.uid}:`, err);
+                            });
                         });
                     });
 
                     fetch.once('error', (err) => {
+                        imap.end();
                         reject(err);
                     });
 
@@ -81,6 +97,7 @@ async function fetchAllUnreadEmails() {
         });
 
         imap.once('error', (err) => {
+            imap.end();
             reject(err);
         });
 
@@ -90,17 +107,34 @@ async function fetchAllUnreadEmails() {
 
 
 
+
+
 // Function to check emails periodically
 function checkEmails(emails) {
     console.log('\n=== Lecture des nouveaux mails ===');
-    emails.forEach((email, index) => {
+    emails.forEach(async (email, index) => {
+        from = email.headers.from
+        subject = email.headers.subject;
+        body = email.body;
+        
         console.log(`\nEmail ${index + 1}:`);
         console.log(`From: ${email.headers.from}`);
         console.log(`Subject: ${email.headers.subject}`);
         console.log(`Subject: ${email.body}`);
 
+        const completion = chatgptouille(from,subject,body);
+        await completion.then((result) => {
+            const message = result.choices[0].message.content; // Stocke le résultat dans une variable
+            //send_email(message,from,subject,decodedContent);
+            console.log(message);
+            send_email(message, from, subject);
+        });
+
+
     });
 }
+
+
 
 async function send_email(result, from, subject) {
 
@@ -130,6 +164,7 @@ async function send_email(result, from, subject) {
 
 }
 
+
 app.use(express.static(path.join(__dirname)));
 
 /*
@@ -147,15 +182,20 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
-const completion = openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    store: true,
-    messages: [{ role: "user", "content": "écris un paragraphe de 10 lignes sur Antoine Priou le clown très moche et très mauvais" }]
-});
 
-completion.then((response) => {
-    console.log(response.choices[0].message);
-});
+async function chatgptouille(email,object,content){
+    const response = openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        store: true,
+        messages: [
+            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - email : ${email} - objet : ${object} - contenu : ${content}` },
+        ],
+    });
+    
+    return response;
+    //return completion.then((result) => result.choices[0].message);
+    
+}   
 
 
 
@@ -182,13 +222,12 @@ async function testcheck(){
 
     try {
         const emails = await fetchAllUnreadEmails();
-        
-        console.log("Emails fetched successfully" + emails);
 
-        if(emails != []){
-            checkEmails(emails);
-        }
-        else{ console.log('Pas de nouveau mail')}
+        if(emails.length === 0){
+            //checkEmails(emails);
+            console.log('Pas de nouveau mail');
+    
+        }else{ checkEmails(emails);}
     } 
     catch (error) {
         console.error('Error fetching emails:', error);
@@ -267,141 +306,3 @@ app.use((req, res) => {
     res.status(404).send('404: Page not found');
 });
 
-
-
-
-
-/*
-// Fonction pour vérifier les nouveaux emails
-async function checkForNewEmails() {
-
-    const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-
-    try {
-        const response = await gmail.users.messages.list({
-            userId: 'me',
-            labelIds: ['INBOX'],
-            q: 'is:unread',
-            maxResults: 5,
-        });
-
-        const messages = response.data.messages || [];
-
-        if (messages.length > 0) {
-            console.log('Nouveau(x) mail(s) :', messages.length); // Affiche "Nouveau mail" dans la console
-
-            for (const message of messages) {
-                const msg = await gmail.users.messages.get({
-                    userId: 'me',
-                    id: message.id,
-                });
-
-                const emailData = msg.data;
-                const from = emailData.payload.headers.find(header => header.name === 'From').value;
-                const subject = emailData.payload.headers.find(header => header.name === 'Subject').value;
-                const content = emailData.payload.parts ? emailData.payload.parts[0].body.data : emailData.payload.body.data;
-                const decodedContent = Buffer.from(content, 'base64').toString('utf-8');
-
-                console.log(`De: ${from}`);
-                console.log(`Objet: ${subject}`);
-                console.log(`Contenu: ${decodedContent}`);
-
-                const completion = chatgptouille(from,subject,decodedContent);
-                await completion.then((result) => {
-                    const message = result.choices[0].message.content; // Stocke le résultat dans une variable
-                    send_email(message,from,subject,decodedContent);
-                });
-
-
-                // Marquer le message comme lu
-                console.log("Modification en non-lu")
-                await gmail.users.messages.modify({
-                    userId: 'me',
-                    id: message.id,
-                    resource: {
-                        removeLabelIds: ['UNREAD'],
-                    },
-                });
-            }
-        } else {
-            console.log('Aucun nouveau mail');
-        }
-    } catch (error) {
-        console.error('Erreur lors de la vérification des nouveaux emails:', error);
-    }
-}
-
-
-
-// Fonction pour envoyer un email
-async function send_email(result,from,subject,decodedContent) {
-    
-    console.log("Etape envoie du mail ")
-
-    //const to = 'stanislasfouche@gmail.com';
-    const to = from;
-    const sujet = `Phishing Test : ${subject}` ;
-    //const text = `Texte originale : ${decodedContent}, Résultat : \n${result}`;
-    const text =` Résultat : \n ${result}`;
-
-    console.log(text);
-
-    const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-
-    const emailLines = [
-        `From: ${process.env.EMAIL_USER}`,
-        `To: ${to}`,
-        `Subject: ${sujet}`,
-        '',
-        text,
-    ].join('\n');
-
-    const base64EncodedEmail = Buffer.from(emailLines).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'); // Encode en base64
-
-    try {
-        const response = await gmail.users.messages.send({
-            userId: 'me',
-            requestBody: {
-                raw: base64EncodedEmail,
-            },
-        });
-        console.log('Email envoyé avec succès:', response.data);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de l\'envoi de l\'email:', error);
-        throw new Error('Erreur lors de l\'envoi de l\'email: ' + error.toString());
-    }
-        
-}
-
-
-// Route pour envoyer un email
-app.post('/send-email', async (req, res) => {
-    try {
-        const result = await send_email();
-        res.status(200).send(result);
-    } catch (error) {
-        res.status(500).send(error.message);
-    }
-});
-
-
-
-
-
-
-async function chatgptouille(email,object,content){
-    const response = openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        store: true,
-        messages: [
-            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - email : ${email} - objet : ${object} - contenu : ${content}` },
-        ],
-    });
-    
-    return response;
-    //return completion.then((result) => result.choices[0].message);
-    
-}   
-
-*/
