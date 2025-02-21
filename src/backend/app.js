@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const session = require('express-session');
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
@@ -13,6 +14,29 @@ const nodemailer = require('nodemailer');
 
 const PORT = config.port || 4040;
 const app = express();
+
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
+
+// Initialize passport after session middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Add passport serialization
+passport.serializeUser((user, done) => {
+    done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+    done(null, user);
+});
 
 function formatDateWithOffset(isoDateString) {
     const date = new Date(isoDateString);
@@ -129,9 +153,6 @@ app.use(
         },
     })
 );
-
-app.use(passport.initialize());
-app.use(passport.session());
 
 passport.use(
     new GoogleStrategy(
