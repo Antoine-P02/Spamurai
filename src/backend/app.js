@@ -15,27 +15,8 @@ const nodemailer = require('nodemailer');
 const PORT = config.port || 4040;
 const app = express();
 
-app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-}));
 
-// Initialize passport after session middleware
 app.use(passport.initialize());
-app.use(passport.session());
-
-// Add passport serialization
-passport.serializeUser((user, done) => {
-    done(null, user);
-});
-
-passport.deserializeUser((user, done) => {
-    done(null, user);
-});
 
 function formatDateWithOffset(isoDateString) {
     const date = new Date(isoDateString);
