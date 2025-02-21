@@ -133,3 +133,4 @@ dist
 /node_modules
 /python/venv
 /src/frontend/node_modules
+/src/cloud_console_function_git

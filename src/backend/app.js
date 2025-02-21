@@ -1,22 +1,31 @@
 require('dotenv').config();
+
 const express = require('express');
-const session = require('express-session');
+const bodyParser = require('body-parser');
+const passport = require('passport');
+const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
+
 const path = require('path');
 const config = require('./config');
 const Imap = require('imap');
 const OpenAI = require('openai');
 const nodemailer = require('nodemailer');
+
+const PORT = config.port || 4040;
 const app = express();
-const PORT = config.port || 3000;
 
-const { google } = require('googleapis');
+function formatDateWithOffset(isoDateString) {
+    const date = new Date(isoDateString);
+    date.setHours(date.getHours() + 1); // Add 1 hour for France timezone
 
-const oAuth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,     // Your Google OAuth Client ID
-    process.env.GOOGLE_CLIENT_SECRET, // Your Google OAuth Client Secret
-    'https://spamurai-analysis.vercel.app/callback' // Your redirect URI
-);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = date.getFullYear();
 
+    return `${hours}:${minutes} ${day}/${month}/${year}`;
+}
 
 // IMAP Configuration
 const imapConfig = {
@@ -28,10 +37,9 @@ const imapConfig = {
     tlsOptions: { rejectUnauthorized: false }
 };
 
-const imap = new Imap(imapConfig);
-
 async function fetchLastEmails(count = 5) {
     return new Promise((resolve, reject) => {
+        const imap = new Imap(imapConfig);
         imap.once('ready', () => {
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) reject(err);
@@ -85,22 +93,6 @@ async function fetchLastEmails(count = 5) {
     });
 }
 
-// Function to check emails periodically
-async function checkEmails() {
-    try {
-        const emails = await fetchLastEmails(5);
-        console.log('\n=== Last 5 Emails ===');
-        emails.forEach((email, index) => {
-            console.log(`\nEmail ${index + 1}:`);
-            console.log(`From: ${email.headers.from}`);
-            console.log(`Subject: ${email.headers.subject}`);
-            console.log(`Body: ${email.body.substring(0, 100)}...`);
-        });
-    } catch (error) {
-        console.error('Error fetching emails:', error);
-    }
-}
-
 async function send_email(result, from, subject) {
 
     const transporter = nodemailer.createTransport({
@@ -129,32 +121,147 @@ async function send_email(result, from, subject) {
 
 }
 
-app.use(express.static(path.join(__dirname)));
+app.use(
+    bodyParser.json({
+        limit: "50mb",
+        verify: (req, _, buf) => {
+            req.rawBody = buf;
+        },
+    })
+);
 
-/*
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-*/
+app.use(passport.initialize());
+
+passport.use(
+    new GoogleStrategy(
+        {
+            clientID: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            callbackURL: process.env.GOOGLE_CALLBACK_URL,
+        },
+        (accessToken, refreshToken, profile, done) => {
+            console.log("Access Token: ", accessToken);
+            console.log("Refresh Token: ", refreshToken);
+            console.log("Profile: ", profile);
+            done(null, profile);
+        }
+    )
+);
+
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+function GPT(){
+    const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+    });
+
+    const completion = openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        store: true,
+        messages: [{ role: "user", "content": "écris un paragraphe de 10 lignes sur Antoine Priou le clown très moche et très mauvais" }]
+    });
+
+    completion.then((response) => {
+        console.log(response.choices[0].message);
+    });
+}
+
+app.get("/auth/google",
+    passport.authenticate("google", {
+        scope: [
+            "profile",
+            "email",
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/gmail.labels",
+        ],
+    })
+);
+
+app.get("/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login" }),
+    (req, res) => {
+        res.redirect("/");
+    }
+);
+
+app.post("/webhook/gmail", (req, res) => {
+    console.log("Gmail Webhook Received");
+    res.status(200).send("ok");
+
+    console.log("Mail received at: ", formatDateWithOffset(req.body.message.publishTime));
+
+    const { message } = req.body;
+
+    if (!message || !message.data) {
+        console.log("No message data found");
+        return;
+    }
+
+    // Decode the Base64 encoded message data
+    const encodedMessage = message.data;
+    const decodedMessage = JSON.parse(
+        Buffer.from(encodedMessage, "base64").toString("utf-8")
+    );
+    console.log("Decoded Message: ", decodedMessage, "\n\n");
 });
 
-const completion = openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    store: true,
-    messages: [{ role: "user", "content": "écris un paragraphe de 10 lignes sur Antoine Priou le clown très moche et très mauvais" }]
+
+// Replace the setInterval with an API endpoint
+app.get('/', async (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-completion.then((response) => {
-    console.log(response.choices[0].message);
+app.get('/api/get/emails', async (req, res) => {
+    try {
+        const emails = await fetchLastEmails(5);
+        console.log("Emails fetched successfully" + emails);
+        res.send("Emails fetched successfully" + emails);
+    } 
+    catch (error) {
+        console.error('Error fetching emails:', error);
+        res.send("Error fetching emails : " + error.message);
+    }
 });
+
+app.get('/api/post/emails', async (req, res) => {
+    try {
+        const result = await send_email("allo", process.env.EMAIL_USER, "test1");
+        console.log("Email sent successfully");
+        res.send("Email sent successfully" + result.response);
+    } catch (error) {
+        console.error('Error sending email:', error);
+        res.send("Error sending email : " + error.message);
+    }
+});
+
+app.post('/api/get/notif', async (req, res) => {
+    try {
+        const emails = await fetchLastEmails(5);
+        console.log("omgggggggg" + emails);
+        res.send("omgggggggg" + emails);
+    }
+    catch (error) {
+        console.error('big ff:', error);
+        res.send("big ff : " + error.message);
+    }
+});
+
+// Handle other errors
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('500: Something broke!');
+});
+
+// Handle 404 errors
+app.use((req, res) => {
+    res.status(404).send('404: Page not found');
+});
+
 
 
 
@@ -173,66 +280,6 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-
-// Fonction pour vérifier les nouveaux emails
-async function checkForNewEmails() {
-    if (!isLoggedIn) return; // Ne pas vérifier si l'utilisateur n'est pas connecté
-
-    const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-
-    try {
-        const response = await gmail.users.messages.list({
-            userId: 'me',
-            labelIds: ['INBOX'],
-            q: 'is:unread',
-            maxResults: 5,
-        });
-
-        const messages = response.data.messages || [];
-
-        if (messages.length > 0) {
-            console.log('Nouveau(x) mail(s) :', messages.length); // Affiche "Nouveau mail" dans la console
-
-            for (const message of messages) {
-                const msg = await gmail.users.messages.get({
-                    userId: 'me',
-                    id: message.id,
-                });
-
-                const emailData = msg.data;
-                const from = emailData.payload.headers.find(header => header.name === 'From').value;
-                const subject = emailData.payload.headers.find(header => header.name === 'Subject').value;
-                const content = emailData.payload.parts ? emailData.payload.parts[0].body.data : emailData.payload.body.data;
-                const decodedContent = Buffer.from(content, 'base64').toString('utf-8');
-
-                console.log(`De: ${from}`);
-                console.log(`Objet: ${subject}`);
-                console.log(`Contenu: ${decodedContent}`);
-
-                const completion = chatgptouille(from,subject,decodedContent);
-                await completion.then((result) => {
-                    const message = result.choices[0].message.content; // Stocke le résultat dans une variable
-                    send_email(message,from,subject,decodedContent);
-                });
-
-
-                // Marquer le message comme lu
-                console.log("Modification en non-lu")
-                await gmail.users.messages.modify({
-                    userId: 'me',
-                    id: message.id,
-                    resource: {
-                        removeLabelIds: ['UNREAD'],
-                    },
-                });
-            }
-        } else {
-            console.log('Aucun nouveau mail');
-        }
-    } catch (error) {
-        console.error('Erreur lors de la vérification des nouveaux emails:', error);
-    }
-}
 
 // Fonction pour démarrer la vérification des emails
 function startEmailCheck() {
@@ -305,116 +352,4 @@ app.post('/send-email', async (req, res) => {
     }
 });
 
-
-
-
-
-
-async function chatgptouille(email,object,content){
-    const response = openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        store: true,
-        messages: [
-            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - email : ${email} - objet : ${object} - contenu : ${content}` },
-        ],
-    });
-    
-    return response;
-    //return completion.then((result) => result.choices[0].message);
-    
-}   
-
-
 */
-
-
-
-// Handle other errors
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('500: Something broke!');
-});
-
-// Replace the setInterval with an API endpoint
-app.get('/', async (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-
-app.get('/api/get/emails', async (req, res) => {
-    try {
-        const emails = await fetchLastEmails(5);
-        console.log("Emails fetched successfully" + emails);
-        res.send("Emails fetched successfully" + emails);
-    } 
-    catch (error) {
-        console.error('Error fetching emails:', error);
-        res.send("Error fetching emails : " + error.message);
-    }
-});
-
-app.get('/api/post/emails', async (req, res) => {
-    try {
-        const result = await send_email("allo", process.env.EMAIL_USER, "test1");
-        console.log("Email sent successfully");
-        res.send("Email sent successfully" + result.response);
-    } catch (error) {
-        console.error('Error sending email:', error);
-        res.send("Error sending email : " + error.message);
-    }
-});
-
-app.post('/api/get/notif', async (req, res) => {
-    try {
-        const emails = await fetchLastEmails(5);
-        console.log("omgggggggg" + emails);
-        res.send("omgggggggg" + emails);
-    }
-    catch (error) {
-        console.error('big ff:', error);
-        res.send("big ff : " + error.message);
-    }
-});
-
-app.get('/callback', async (req, res) => {
-    const { code } = req.query;
-    console.log("Debug :");
-    console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-    console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET);
-    console.log('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL);
-
-
-    if (!code) {
-        return res.status(400).send('No code received');
-    }
-
-    try {
-        // Exchange code for access token
-        const { tokens } = await oAuth2Client.getToken(code);
-        oAuth2Client.setCredentials(tokens);
-
-        // Store tokens securely (e.g., in a database or session)
-        console.log('Access Token:', tokens.access_token);
-        console.log('Refresh Token:', tokens.refresh_token);
-
-        try {
-            const result = await send_email("allo", process.env.EMAIL_USER, "test1");
-            console.log("Email sent successfully");
-            res.send("Email sent successfully" + result.response);
-        } catch (error) {
-            console.error('Error sending email:', error);
-            res.send("Error sending email : " + error.message);
-        }
-
-
-    } catch (error) {
-        console.error('Error exchanging code for token:', error);
-        res.status(500).send('Authentication failed');
-    }
-});
-
-
-// Handle 404 errors
-app.use((req, res) => {
-    res.status(404).send('404: Page not found');
-});
