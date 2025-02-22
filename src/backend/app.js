@@ -46,25 +46,30 @@ function formatDateWithOffset(isoDateString) {
 }
 
 async function fetchAllUnreadEmails() {
-
+    console.log("Starting to fetch all unread emails...");
     const imap = new Imap(imapConfig);
 
     return new Promise((resolve, reject) => {
-
         imap.once('ready', () => {
+            console.log("IMAP client is ready.");
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
+                    console.error("Error opening INBOX:", err);
                     imap.end();
                     return reject(err);
                 }
+                console.log("INBOX opened successfully.");
 
                 imap.search(['UNSEEN'], (err, results) => {
                     if (err) {
+                        console.error("Error searching for unseen emails:", err);
                         imap.end();
                         return reject(err);
                     }
+                    console.log(`Found ${results.length} unseen emails.`);
 
                     if (results.length === 0) {
+                        console.log("No unseen emails found.");
                         imap.end();
                         return resolve([]);
                     }
@@ -76,10 +81,12 @@ async function fetchAllUnreadEmails() {
                     });
 
                     fetch.on('message', (msg, seqno) => {
+                        console.log(`Fetching email with seqno: ${seqno}`);
                         let email = { seqno };
 
                         msg.on('attributes', (attrs) => {
                             email.uid = attrs.uid;
+                            console.log(`Email UID: ${email.uid}`);
                         });
 
                         msg.on('body', (stream, info) => {
@@ -90,26 +97,31 @@ async function fetchAllUnreadEmails() {
                             stream.on('end', () => {
                                 if (info.which === 'TEXT') {
                                     email.body = buffer;
+                                    console.log(`Email body fetched for UID ${email.uid}`);
                                 } else {
                                     email.headers = Imap.parseHeader(buffer);
+                                    console.log(`Email headers fetched for UID ${email.uid}`);
                                 }
                             });
                         });
 
                         msg.once('end', () => {
                             emails.push(email);
+                            console.log(`Email with UID ${email.uid} fetched.`);
                             imap.addFlags(email.uid, ['\\Seen'], (err) => {
-                                if (err) console.error(`Erreur marquage UID ${email.uid}:`, err);
+                                if (err) console.error(`Error marking UID ${email.uid} as seen:`, err);
                             });
                         });
                     });
 
                     fetch.once('error', (err) => {
+                        console.error("Error fetching emails:", err);
                         imap.end();
                         reject(err);
                     });
 
                     fetch.once('end', () => {
+                        console.log("All emails fetched successfully.");
                         imap.end();
                         resolve(emails);
                     });
@@ -118,6 +130,7 @@ async function fetchAllUnreadEmails() {
         });
 
         imap.once('error', (err) => {
+            console.error("IMAP client error:", err);
             imap.end();
             reject(err);
         });
