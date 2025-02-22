@@ -4,6 +4,9 @@ const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
 const passport = require('passport');
+const jsdom = require('jsdom');
+const { JSDOM } = jsdom;
+const { send } = require('process');
 const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 
 const path = require('path');
@@ -29,39 +32,12 @@ const imapConfig = {
     tlsOptions: { rejectUnauthorized: false }
 };
 
-function formatDateWithOffset(isoDateString) {
-    const date = new Date(isoDateString);
-    date.setHours(date.getHours() + 1); // Add 1 hour for France timezone
-
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-    const year = date.getFullYear();
-
-    return `${hours}:${minutes} ${day}/${month}/${year}`;
-}
-
-async function fetchNew() {
-    try {
-        const emails = await fetchAllUnreadEmails();
-
-        if (emails.length === 0) {
-            console.log('Pas de nouveau mail');
-        }
-        else {
-            checkEmails(emails);
-        }
-    }
-    catch (error) {
-        console.error('Error fetching emails:', error);
-    }
-}
-
 async function fetchAllUnreadEmails() {
+
     const imap = new Imap(imapConfig);
 
     return new Promise((resolve, reject) => {
+
         imap.once('ready', () => {
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
@@ -82,7 +58,7 @@ async function fetchAllUnreadEmails() {
 
                     const emails = [];
                     const fetch = imap.fetch(results, {
-                        bodies: ['HEADER.FIELDS (FROM SUBJECT)', 'TEXT'],
+                        bodies: ['HEADER', 'TEXT'],
                         struct: true
                     });
 
@@ -139,40 +115,29 @@ async function fetchAllUnreadEmails() {
 
 function checkEmails(emails) {
     console.log('\n=== Lecture des nouveaux mails ===');
-
     emails.forEach(async (email, index) => {
-        from = email.headers.from
-        subject = email.headers.subject;
-        body = email.body;
+        const { originalSender, forwarder } = getEmailSenders(email.headers, email.body);
+        const object = email.headers.subject[0];
+        const content = email.body;
 
-        console.log(`\nEmail ${index + 1}:`);
-        console.log(`From: ${email.headers.from}`);
-        console.log(`Subject: ${email.headers.subject}`);
-        console.log(`Subject: ${email.body}`);
+        console.log("Original sender: " + originalSender + "/ Forwarded by: " + forwarder + " / Subject: " + object);
 
-        const completion = analysis_LLM(from, subject, body);
+        if (originalSender === forwarder) { // Skip emails that are not forwarded
+            console.log('Email non-forwarded, skipping...');
+            return;
+        }
+
+        const completion = chatgptouille(originalSender, forwarder, object, content);
         await completion.then((result) => {
-            const message = result.choices[0].message.content; // Stocke le résultat dans une variable
-            console.log(message);
-            send_email(message, from, subject);
+
+            if (result != false) {
+                const message = result.choices[0].message.content; // Stocke le résultat dans une variable
+                console.log(message);
+                const text_answer = "🤖 SPAMURAI Phishing Analysis 🚀:\n" + object;
+                send_email(message, forwarder, text_answer);  // Send response to the forwarder
+            }
         });
     });
-}
-
-async function analysis_LLM(email, object, content) {
-    const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-    });
-
-    const response = openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        store: true,
-        messages: [
-            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - email : ${email} - objet : ${object} - contenu : ${content}` },
-        ],
-    });
-
-    return response;
 }
 
 async function send_email(result, from, subject) {
@@ -188,8 +153,8 @@ async function send_email(result, from, subject) {
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: from,
-        subject: `Phishing Test : ${subject}`,
-        text: ` Résultat : \n ${result}`
+        subject: `SPAMURAI Phishing Analysis : ${subject}`,
+        text: result
     };
 
     try {
@@ -229,6 +194,79 @@ passport.use(
     )
 );
 
+function extractContent(html) {
+    const dom = new JSDOM(html);
+    return dom.window.document.body.textContent || '';
+}
+
+async function chatgptouille(originalSender, forwarder, object, content) {
+    mail_size = originalSender.length + object.length + extractContent(content).length;
+    console.log("mail size : " + mail_size);
+    return false;
+    if (mail_size > 15000) {
+        send_email("⚠️ We're sorry" + forwarder + "to tell you but the mail you gave us from" + originalSender + "is too heavy and we don't have the computer power yet to analyse yet 🤖... but tune in, we're working on it and might be able to soon! 🚀",
+            forwarder,
+            "Issue with your query (mail too long)");
+        return false;
+    }
+
+    const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+    });
+
+    const response = openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        store: false,
+        messages: [
+            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - mail venant de l'adresse : ${originalSender} - objet du mail : ${object} - contenu : ${content} ` },
+        ],
+    });
+
+    return response;
+
+}
+
+async function fetchNew() {
+    console.log(" Relance du code ");
+
+    try {
+        const emails = await fetchAllUnreadEmails();
+
+        if (emails.length === 0) {
+            console.log('Pas de nouveau mail');
+
+        } else { 
+            checkEmails(emails); 
+        }
+    }
+    catch (error) {
+        console.error('Error fetching emails:', error);
+    }
+
+}
+
+function getEmailSenders(headers, content) {
+    let originalSender = '';
+    const forwarder = headers.from[0];
+
+    // Look for Gmail's forwarded message marker
+    if (content.includes('---------- Forwarded message ---------')) {
+        // Parse the forwarded message headers
+        const dePattern = /De\s*:\s*([^<]*<[^>]*>|[^\n]*)/i;
+        const match = content.match(dePattern);
+
+        if (match && match[1]) {
+            originalSender = match[1].trim();
+        } else {
+            originalSender = forwarder;
+        }
+    } else {
+        // Not a forwarded message
+        originalSender = forwarder;
+    }
+
+    return { originalSender, forwarder };
+}
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
