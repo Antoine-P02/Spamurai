@@ -18,6 +18,17 @@ const app = express();
 
 app.use(passport.initialize());
 
+
+// IMAP Configuration
+const imapConfig = {
+    user: process.env.EMAIL_USER,
+    password: process.env.APP_PASSWORD,  // App Password from Google Account
+    host: 'imap.gmail.com',
+    port: 993,
+    tls: true,
+    tlsOptions: { rejectUnauthorized: false }
+};
+
 function formatDateWithOffset(isoDateString) {
     const date = new Date(isoDateString);
     date.setHours(date.getHours() + 1); // Add 1 hour for France timezone
@@ -31,70 +42,137 @@ function formatDateWithOffset(isoDateString) {
     return `${hours}:${minutes} ${day}/${month}/${year}`;
 }
 
-// IMAP Configuration
-const imapConfig = {
-    user: process.env.EMAIL_USER,
-    password: process.env.APP_PASSWORD,  // App Password from Google Account
-    host: 'imap.gmail.com',
-    port: 993,
-    tls: true,
-    tlsOptions: { rejectUnauthorized: false }
-};
+async function fetchNew() {
+    try {
+        const emails = await fetchAllUnreadEmails();
 
-async function fetchLastEmails(count = 5) {
+        if (emails.length === 0) {
+            console.log('Pas de nouveau mail');
+        }
+        else {
+            checkEmails(emails);
+        }
+    }
+    catch (error) {
+        console.error('Error fetching emails:', error);
+    }
+}
+
+async function fetchAllUnreadEmails() {
+    const imap = new Imap(imapConfig);
+
     return new Promise((resolve, reject) => {
-        const imap = new Imap(imapConfig);
         imap.once('ready', () => {
             imap.openBox('INBOX', false, (err, box) => {
-                if (err) reject(err);
-
-                const totalMessages = box.messages.total;
-                const fetch = imap.seq.fetch(`${Math.max(1, totalMessages - count + 1)}:${totalMessages}`, {
-                    bodies: ['HEADER.FIELDS (FROM SUBJECT)', 'TEXT'],
-                    struct: true
-                });
-
-                const emails = [];
-
-                fetch.on('message', (msg) => {
-                    const email = {};
-
-                    msg.on('body', (stream, info) => {
-                        let buffer = '';
-                        stream.on('data', (chunk) => {
-                            buffer += chunk.toString('utf8');
-                        });
-                        stream.on('end', () => {
-                            if (info.which === 'TEXT') {
-                                email.body = buffer;
-                            } else {
-                                email.headers = Imap.parseHeader(buffer);
-                            }
-                        });
-                    });
-
-                    msg.once('end', () => {
-                        emails.push(email);
-                    });
-                });
-
-                fetch.once('error', (err) => {
-                    reject(err);
-                });
-
-                fetch.once('end', () => {
+                if (err) {
                     imap.end();
-                    resolve(emails);
+                    return reject(err);
+                }
+
+                imap.search(['UNSEEN'], (err, results) => {
+                    if (err) {
+                        imap.end();
+                        return reject(err);
+                    }
+
+                    if (results.length === 0) {
+                        imap.end();
+                        return resolve([]);
+                    }
+
+                    const emails = [];
+                    const fetch = imap.fetch(results, {
+                        bodies: ['HEADER.FIELDS (FROM SUBJECT)', 'TEXT'],
+                        struct: true
+                    });
+
+                    fetch.on('message', (msg, seqno) => {
+                        let email = { seqno };
+
+                        msg.on('attributes', (attrs) => {
+                            email.uid = attrs.uid;
+                        });
+
+                        msg.on('body', (stream, info) => {
+                            let buffer = '';
+                            stream.on('data', (chunk) => {
+                                buffer += chunk.toString('utf8');
+                            });
+                            stream.on('end', () => {
+                                if (info.which === 'TEXT') {
+                                    email.body = buffer;
+                                } else {
+                                    email.headers = Imap.parseHeader(buffer);
+                                }
+                            });
+                        });
+
+                        msg.once('end', () => {
+                            emails.push(email);
+                            imap.addFlags(email.uid, ['\\Seen'], (err) => {
+                                if (err) console.error(`Erreur marquage UID ${email.uid}:`, err);
+                            });
+                        });
+                    });
+
+                    fetch.once('error', (err) => {
+                        imap.end();
+                        reject(err);
+                    });
+
+                    fetch.once('end', () => {
+                        imap.end();
+                        resolve(emails);
+                    });
                 });
             });
         });
 
         imap.once('error', (err) => {
+            imap.end();
             reject(err);
         });
 
         imap.connect();
     });
+}
+
+function checkEmails(emails) {
+    console.log('\n=== Lecture des nouveaux mails ===');
+
+    emails.forEach(async (email, index) => {
+        from = email.headers.from
+        subject = email.headers.subject;
+        body = email.body;
+
+        console.log(`\nEmail ${index + 1}:`);
+        console.log(`From: ${email.headers.from}`);
+        console.log(`Subject: ${email.headers.subject}`);
+        console.log(`Subject: ${email.body}`);
+
+        const completion = analysis_LLM(from, subject, body);
+        await completion.then((result) => {
+            const message = result.choices[0].message.content; // Stocke le résultat dans une variable
+            console.log(message);
+            send_email(message, from, subject);
+        });
+    });
+}
+
+async function analysis_LLM(email, object, content) {
+    const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+    });
+
+    const response = openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        store: true,
+        messages: [
+            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - email : ${email} - objet : ${object} - contenu : ${content}` },
+        ],
+    });
+
+    return response;
 }
 
 async function send_email(result, from, subject) {
@@ -124,6 +202,7 @@ async function send_email(result, from, subject) {
     }
 
 }
+
 
 app.use(
     bodyParser.json({
@@ -155,22 +234,6 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-
-function GPT(){
-    const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-    });
-
-    const completion = openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        store: true,
-        messages: [{ role: "user", "content": "écris un paragraphe de 10 lignes sur Antoine Priou le clown très moche et très mauvais" }]
-    });
-
-    completion.then((response) => {
-        console.log(response.choices[0].message);
-    });
-}
 
 app.get("/auth/google",
     passport.authenticate("google", {
@@ -210,6 +273,10 @@ app.post("/webhook/gmail", (req, res) => {
         Buffer.from(encodedMessage, "base64").toString("utf-8")
     );
     console.log("Decoded Message: ", decodedMessage, "\n\n");
+    fetchNew();
+
+    
+
 });
 
 
@@ -265,93 +332,3 @@ app.use((req, res) => {
 });
 
 
-
-
-
-
-/*
-
-// Configuration du transporteur Nodemailer
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        type: 'OAuth2',
-        user: process.env.EMAIL_USER, // Votre adresse email
-        clientId: CLIENT_ID,
-        clientSecret: CLIENT_SECRET,
-    },
-});
-
-
-// Fonction pour démarrer la vérification des emails
-function startEmailCheck() {
-    if (!emailCheckInterval) {
-        emailCheckInterval = setInterval(checkForNewEmails, 30000);
-    }
-}
-
-// Fonction pour arrêter la vérification des emails
-function stopEmailCheck() {
-    if (emailCheckInterval) {
-        clearInterval(emailCheckInterval);
-        emailCheckInterval = null;
-    }
-}
-
-
-
-
-
-// Fonction pour envoyer un email
-async function send_email(result,from,subject,decodedContent) {
-    
-    console.log("Etape envoie du mail ")
-
-    //const to = 'stanislasfouche@gmail.com';
-    const to = from;
-    const sujet = `Phishing Test : ${subject}` ;
-    //const text = `Texte originale : ${decodedContent}, Résultat : \n${result}`;
-    const text =` Résultat : \n ${result}`;
-
-    console.log(text);
-
-    const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
-
-    const emailLines = [
-        `From: ${process.env.EMAIL_USER}`,
-        `To: ${to}`,
-        `Subject: ${sujet}`,
-        '',
-        text,
-    ].join('\n');
-
-    const base64EncodedEmail = Buffer.from(emailLines).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'); // Encode en base64
-
-    try {
-        const response = await gmail.users.messages.send({
-            userId: 'me',
-            requestBody: {
-                raw: base64EncodedEmail,
-            },
-        });
-        console.log('Email envoyé avec succès:', response.data);
-        return response.data;
-    } catch (error) {
-        console.error('Erreur lors de l\'envoi de l\'email:', error);
-        throw new Error('Erreur lors de l\'envoi de l\'email: ' + error.toString());
-    }
-        
-}
-
-
-// Route pour envoyer un email
-app.post('/send-email', async (req, res) => {
-    try {
-        const result = await send_email();
-        res.status(200).send(result);
-    } catch (error) {
-        res.status(500).send(error.message);
-    }
-});
-
-*/
