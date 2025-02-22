@@ -298,11 +298,13 @@ async function fetchNew() {
 
     try {
         const emails = await fetchAllUnreadEmails();
+        console.log("Emails fetched successfully" + emails);
 
         if (emails.length === 0) {
             console.log('Pas de nouveau mail');
 
         } else { 
+            console.log("We have new emails");
             checkEmails(emails); 
         }
     }
