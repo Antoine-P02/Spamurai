@@ -382,25 +382,21 @@ app.post("/webhook/gmail", async (req, res) => {
     console.log("Decoded Message: ", decodedMessage, "\n\n");
     
     try {
-        const emails = await fetchAllUnreadEmails();
-        console.log("Emails fetched successfully" + emails);
-        res.send("Emails fetched successfully" + emails);
-
-        if (emails.length === 0) {
-            console.log('Pas de nouveau mail');
-
-        } else {
-            console.log("We have new emails");
-            checkEmails(emails);
+        // Send immediate response to Gmail
+        res.status(200).send("ok");
+        
+        // Make HTTP request to our GET endpoint
+        const fetch = await import('node-fetch');
+        const response = await fetch.default(`${process.env.BASE_URL}/api/get/emails`);
+        
+        if (!response.ok) {
+            throw new Error(`GET request failed: ${response.status}`);
         }
+        
+        console.log("Email processing triggered via GET endpoint");
+    } catch (error) {
+        console.error("Error triggering email processing:", error);
     }
-    catch (error) {
-        console.error('Error fetching emails:', error);
-        res.send("Error fetching emails : " + error.message);
-    }
-
-    
-
 });
 
 
