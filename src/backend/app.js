@@ -48,8 +48,9 @@ function formatDateWithOffset(isoDateString) {
 async function fetchAllUnreadEmails() {
     console.log("Starting to fetch all unread emails...");
     const imap = new Imap(imapConfig);
-
+    console.log("imap const created");
     return new Promise((resolve, reject) => {
+        console.log("object created");
         imap.once('ready', () => {
             console.log("IMAP client is ready.");
             imap.openBox('INBOX', false, (err, box) => {
