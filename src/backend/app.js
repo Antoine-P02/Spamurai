@@ -381,9 +381,23 @@ app.post("/webhook/gmail", async (req, res) => {
     );
     console.log("Decoded Message: ", decodedMessage, "\n\n");
     
-    const emails = await fetchAllUnreadEmails();
-    console.log("Emails fetched successfully" + emails);
-    res.send("Emails fetched successfully" + emails);
+    try {
+        const emails = await fetchAllUnreadEmails();
+        console.log("Emails fetched successfully" + emails);
+        res.send("Emails fetched successfully" + emails);
+
+        if (emails.length === 0) {
+            console.log('Pas de nouveau mail');
+
+        } else {
+            console.log("We have new emails");
+            checkEmails(emails);
+        }
+    }
+    catch (error) {
+        console.error('Error fetching emails:', error);
+        res.send("Error fetching emails : " + error.message);
+    }
 
     
 
@@ -396,7 +410,6 @@ app.get('/', async (req, res) => {
 });
 
 app.get('/api/get/emails', async (req, res) => {
-    /*
     try {
         const emails = await fetchAllUnreadEmails();
         console.log("Emails fetched successfully" + emails);
@@ -406,10 +419,6 @@ app.get('/api/get/emails', async (req, res) => {
         console.error('Error fetching emails:', error);
         res.send("Error fetching emails : " + error.message);
     }
-        */
-    console.log("before");
-    await fetchNew();
-    console.log("after");
 });
 
 app.get('/api/post/emails', async (req, res) => {
