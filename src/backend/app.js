@@ -405,9 +405,11 @@ app.get('/', async (req, res) => {
 
 app.get('/api/get/emails', async (req, res) => {
     try {
-        const emails = await fetchAllUnreadEmails();
-        console.log("Emails fetched successfully" + emails);
-        res.send("Emails fetched successfully" + emails);
+        await fetchNew();
+        res.send("Emails fetched successfully");
+        //const emails = await fetchAllUnreadEmails();
+        //console.log("Emails fetched successfully" + emails);
+        //res.send("Emails fetched successfully" + emails);
     } 
     catch (error) {
         console.error('Error fetching emails:', error);
