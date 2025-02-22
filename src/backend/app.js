@@ -363,8 +363,6 @@ app.get("/auth/google/callback",
 
 app.post("/webhook/gmail", async (req, res) => {
     console.log("Gmail Webhook Received");
-    res.status(200).send("ok");
-
     console.log("Mail received at: ", formatDateWithOffset(req.body.message.publishTime));
 
     const { message } = req.body;
