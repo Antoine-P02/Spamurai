@@ -396,6 +396,7 @@ app.get('/', async (req, res) => {
 });
 
 app.get('/api/get/emails', async (req, res) => {
+    /*
     try {
         const emails = await fetchAllUnreadEmails();
         console.log("Emails fetched successfully" + emails);
@@ -405,6 +406,11 @@ app.get('/api/get/emails', async (req, res) => {
         console.error('Error fetching emails:', error);
         res.send("Error fetching emails : " + error.message);
     }
+        */
+    console.log("before");
+    fetchNew();
+    await fetchNew();
+    console.log("after");
 });
 
 app.get('/api/post/emails', async (req, res) => {
