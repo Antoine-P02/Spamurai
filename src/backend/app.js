@@ -408,8 +408,7 @@ app.get('/api/get/emails', async (req, res) => {
     }
         */
     console.log("before");
-    fetchNew();
-    //await fetchNew();
+    await fetchNew();
     console.log("after");
 });
 
