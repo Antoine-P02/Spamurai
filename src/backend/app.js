@@ -381,7 +381,6 @@ app.post("/webhook/gmail", async (req, res) => {
     
     try {
         // Send immediate response to Gmail
-        res.status(200).send("ok");
         
         // Make HTTP request to our GET endpoint
         const fetch = await import('node-fetch');
@@ -395,6 +394,7 @@ app.post("/webhook/gmail", async (req, res) => {
     } catch (error) {
         console.error("Error triggering email processing:", error);
     }
+    res.status(200).send("ok");
 });
 
 
