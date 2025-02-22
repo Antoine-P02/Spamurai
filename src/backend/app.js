@@ -385,7 +385,7 @@ app.post("/webhook/gmail", async (req, res) => {
         
         // Make HTTP request to our GET endpoint
         const fetch = await import('node-fetch');
-        const response = await fetch.default(`${process.env.BASE_URL}/api/get/emails`);
+        const response = await fetch.default("https://spamurai-analysis.vercel.app/api/get/emails");
         
         if (!response.ok) {
             throw new Error(`GET request failed: ${response.status}`);
