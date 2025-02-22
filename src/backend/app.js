@@ -392,7 +392,7 @@ app.get('/', async (req, res) => {
 
 app.get('/api/get/emails', async (req, res) => {
     try {
-        const emails = await fetchLastEmails(5);
+        const emails = await fetchAllUnreadEmails();
         console.log("Emails fetched successfully" + emails);
         res.send("Emails fetched successfully" + emails);
     } 
