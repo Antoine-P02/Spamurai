@@ -361,7 +361,7 @@ app.get("/auth/google/callback",
     }
 );
 
-app.post("/webhook/gmail", (req, res) => {
+app.post("/webhook/gmail", async (req, res) => {
     console.log("Gmail Webhook Received");
     res.status(200).send("ok");
 
@@ -380,7 +380,10 @@ app.post("/webhook/gmail", (req, res) => {
         Buffer.from(encodedMessage, "base64").toString("utf-8")
     );
     console.log("Decoded Message: ", decodedMessage, "\n\n");
-    fetchNew();
+    
+    const emails = await fetchAllUnreadEmails();
+    console.log("Emails fetched successfully" + emails);
+    res.send("Emails fetched successfully" + emails);
 
     
 
