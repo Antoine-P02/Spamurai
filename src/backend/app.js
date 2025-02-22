@@ -202,7 +202,7 @@ function extractContent(html) {
 async function chatgptouille(originalSender, forwarder, object, content) {
     mail_size = originalSender.length + object.length + extractContent(content).length;
     console.log("mail size : " + mail_size);
-    return false;
+
     if (mail_size > 15000) {
         send_email("⚠️ We're sorry" + forwarder + "to tell you but the mail you gave us from" + originalSender + "is too heavy and we don't have the computer power yet to analyse yet 🤖... but tune in, we're working on it and might be able to soon! 🚀",
             forwarder,
