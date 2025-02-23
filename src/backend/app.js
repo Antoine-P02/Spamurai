@@ -53,8 +53,8 @@ async function fetchAllUnreadEmails() {
     // Create IMAP instance with timeout options
     const imap = new Imap({
         ...imapConfig,
-        connTimeout: 10000, // Connection timeout after 10 seconds
-        authTimeout: 10000,  // Auth timeout after 5 seconds
+        connTimeout: 20000, // Connection timeout after 10 seconds
+        authTimeout: 15000,  // Auth timeout after 5 seconds
     });
 
     console.log("imap const created");
