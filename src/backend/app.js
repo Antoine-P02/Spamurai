@@ -14,6 +14,7 @@ const config = require('./config');
 const Imap = require('imap');
 const OpenAI = require('openai');
 const nodemailer = require('nodemailer');
+const { keep } = require('googleapis/build/src/apis/keep');
 
 const PORT = config.port || 4040;
 const app = express();
@@ -29,7 +30,8 @@ const imapConfig = {
     host: 'imap.gmail.com',
     port: 993,
     tls: true,
-    tlsOptions: { rejectUnauthorized: false }
+    tlsOptions: { rejectUnauthorized: false },
+    keepalive: true,
 };
 
 function formatDateWithOffset(isoDateString) {
@@ -51,8 +53,8 @@ async function fetchAllUnreadEmails() {
     // Create IMAP instance with timeout options
     const imap = new Imap({
         ...imapConfig,
-        connTimeout: 20000, // Connection timeout after 10 seconds
-        authTimeout: 15000,  // Auth timeout after 5 seconds
+        connTimeout: 10000, // Connection timeout after 10 seconds
+        authTimeout: 10000,  // Auth timeout after 5 seconds
     });
 
     console.log("imap const created");
@@ -63,7 +65,7 @@ async function fetchAllUnreadEmails() {
             console.error("❌ Global timeout reached - closing connection");
             imap.end();
             reject(new Error("Operation timed out after 30 seconds"));
-        }, 30000);
+        }, 10000);
 
         console.log("📦 IMAP promise initialized");
 
@@ -397,7 +399,7 @@ app.get('/api/get/emails', async (req, res) => {
     try {
         await fetchNew();
         console.log("Emails fetched successfully");
-        res.send("Emails fetched successfully" + emails);
+        res.send("Emails fetched successfully");
     } 
     catch (error) {
         console.error('Error fetching emails:', error);
