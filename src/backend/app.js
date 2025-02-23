@@ -283,7 +283,7 @@ async function analysis_LLM(originalSender, forwarder, object, content) {
             {
                 "role": "user", "content": `You are a highly skilled cybersecurity expert with years of experience in threat detection and email security. The stakes for this analysis are extremely high—any oversight could lead to severe financial losses, data breaches, or compromised personal information. Your task is to analyze the following forwarded email thoroughly to determine whether it is a phishing attempt.
 
-You must take into account several crucial factors:
+You must take into account several crucial factors and reason through each element with the utmost care. Your analysis should be meticulous, comprehensive, and methodical but only use them for reasoning and do not explain your reasoning in the answer you are gonna give.
 
 Original Sender Analysis:
 
@@ -309,7 +309,7 @@ Evaluate if the content seems out of character for the supposed sender, especial
 Urgency and Consequences:
 
 Detect pressure tactics implying severe consequences if immediate action isn’t taken.
-Treat this analysis with the highest level of scrutiny—consider every possibility, as if a successful phishing attack could result in catastrophic damage. Ensure that all suspicious elements are identified and evaluated thoroughly. \nInputs : \n- originalSender ${originalSender} \n- subject : ${object} \n- content ${content}  At the end of your analysis, only return a score out of 100 indicating how likely this email is to be a phishing attempt—where 0 means "definitely not phishing" and 100 means "certainly phishing."` },
+Treat this analysis with the highest level of scrutiny—consider every possibility, as if a successful phishing attack could result in catastrophic damage. Ensure that all suspicious elements are identified and evaluated thoroughly. \nInputs : \n- originalSender ${originalSender} \n- subject : ${object} \n- content ${content}  At the end of your analysis, YOU MUST RETURN NOTHING ELSE BUT a score out of 100 indicating how likely this email is to be a phishing attempt—where 0 means "definitely not phishing" and 100 means "certainly phishing."` },
         ],
     });
 
