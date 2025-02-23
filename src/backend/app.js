@@ -191,8 +191,30 @@ async function checkEmails(emails) {
             if (completion !== false) {
                 const message = completion.choices[0].message.content;
                 console.log("Analysis result:", message);
-                await send_email(message, forwarder, "🤖 SPAMURAI Phishing Analysis 🚀:\n" + object);
-                console.log("Response email sent successfully");
+
+                try {
+                    console.log("#" + message + "#");
+                    const prediction_result = parseInt(message);
+                    const treshold = 90;
+
+                    if (prediction_result > treshold) {
+                        console.log("Phishing detected");
+                        const returned_text = "⚠️ We're sorry" + forwarder + "to tell you but the mail you gave us from" + originalSender + "is a phishing attempt 🚨. Please be careful and do not click on any links or download any attachments. We recommend you to delete this email immediately. Stay safe! 🛡️";
+                        await send_email(returned_text, forwarder, object);
+                    } 
+                    else {
+                        console.log("Email is not a phishing attempt");
+                        const returned_text = "🎉 Great news" + forwarder + "the mail you gave us from" + originalSender + "is not a phishing attempt 🎣. You can safely proceed with this email. If you have any other questions or concerns, feel free to ask! 🤖";
+                        await send_email(returned_text, forwarder, object);
+                    }
+                    
+                }
+                catch (error) {
+                    console.error("Error parsing LLM response:", error);
+                }
+
+                
+                
             }
         } catch (error) {
             console.error("Error processing email:", error);
