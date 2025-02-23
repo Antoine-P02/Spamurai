@@ -31,7 +31,7 @@ const imapConfig = {
     tls: true,
     tlsOptions: { 
         rejectUnauthorized: false,
-        enableTrace: true  // Enable connection tracing
+        enableTrace: false
     },
     connTimeout: 10000,    // Connection timeout (10 seconds)
     authTimeout: 5000,     // Auth timeout (5 seconds)
@@ -54,17 +54,20 @@ function formatDateWithOffset(isoDateString) {
 async function fetchAllUnreadEmails() {
     console.log("Starting to fetch all unread emails...");
     
-    const imap = new Imap({
-        ...imapConfig,
-        connTimeout: 10000,    // Reduced timeout
-        authTimeout: 5000,     // Reduced timeout
-        debug: (info) => console.log('IMAP Debug:', info)  // More detailed debugging
-    });
+    const imap = new Imap(imapConfig);
 
     return new Promise((resolve, reject) => {
         let isConnectionEnded = false;
+        
+        // Set a shorter timeout for the entire operation
+        const operationTimeout = setTimeout(() => {
+            console.log("Operation timeout - forcing cleanup");
+            cleanup();
+            reject(new Error("Operation timed out"));
+        }, 8000); // 8 seconds total timeout
 
         const cleanup = () => {
+            clearTimeout(operationTimeout);
             if (!isConnectionEnded) {
                 isConnectionEnded = true;
                 try {
