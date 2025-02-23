@@ -195,7 +195,7 @@ async function checkEmails(emails) {
                 try {
                     console.log("#" + message + "#");
                     const prediction_result = parseInt(message);
-                    const treshold = 90;
+                    const treshold = 75;
 
                     if (prediction_result > treshold) {
                         console.log("Phishing detected");
