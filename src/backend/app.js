@@ -29,7 +29,13 @@ const imapConfig = {
     host: 'imap.gmail.com',
     port: 993,
     tls: true,
-    tlsOptions: { rejectUnauthorized: false }
+    tlsOptions: { 
+        rejectUnauthorized: false,
+        enableTrace: true  // Enable connection tracing
+    },
+    connTimeout: 10000,    // Connection timeout (10 seconds)
+    authTimeout: 5000,     // Auth timeout (5 seconds)
+    debug: console.log     // Enable debug logging
 };
 
 function formatDateWithOffset(isoDateString) {
@@ -47,45 +53,49 @@ function formatDateWithOffset(isoDateString) {
 
 async function fetchAllUnreadEmails() {
     console.log("Starting to fetch all unread emails...");
-
-    /*
+    
     const imap = new Imap({
         ...imapConfig,
         connTimeout: 30000, // Connection timeout after 10 seconds
         authTimeout: 30000,  // Auth timeout after 5 seconds
     });
-    */
-
-    const imap = new Imap(imapConfig);
 
     return new Promise((resolve, reject) => {
-        console.log("object created");
+        let isConnectionEnded = false;
 
+        const cleanup = () => {
+            if (!isConnectionEnded) {
+                isConnectionEnded = true;
+                try {
+                    imap.end();
+                } catch (err) {
+                    console.error('Error during cleanup:', err);
+                }
+            }
+        };
+
+        // Handle connection events
         imap.once('ready', () => {
             console.log("IMAP client is ready.");
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
-                    console.log("Ending imap connection...");
-                    imap.end();
+                    console.error("Error opening INBOX:", err);
+                    cleanup();
                     return reject(err);
                 }
-                console.log("INBOX opened successfully.");
 
                 imap.search(['UNSEEN'], (err, results) => {
                     if (err) {
-                        console.log("Error in searching for unseen emails:", err);
-                        imap.end();
+                        console.error("Error searching for unseen emails:", err);
+                        cleanup();
                         return reject(err);
                     }
-                    console.log(`Found ${results.length} unseen emails.`);
 
                     if (results.length === 0) {
-                        console.log("ℹ️ No unseen emails found");
-                        imap.end();
+                        console.log("No unseen emails found");
+                        cleanup();
                         return resolve([]);
                     }
-
-                    console.log(`📨 Found ${results.length} unseen emails`);
 
                     const emails = [];
                     const fetch = imap.fetch(results, {
@@ -117,33 +127,47 @@ async function fetchAllUnreadEmails() {
                         msg.once('end', () => {
                             emails.push(email);
                             imap.addFlags(email.uid, ['\\Seen'], (err) => {
-                                if (err) console.error(`Erreur marquage UID ${email.uid}:`, err);
+                                if (err) console.error(`Error marking UID ${email.uid} as seen:`, err);
                             });
                         });
                     });
 
                     fetch.once('error', (err) => {
-                        imap.end();
+                        console.error("Fetch error:", err);
+                        cleanup();
                         reject(err);
                     });
 
                     fetch.once('end', () => {
-                        imap.end();
+                        cleanup();
                         resolve(emails);
                     });
                 });
             });
         });
+
         console.log("before imap.once error");
+
         imap.once('error', (err) => {
-            imap.end();
+            console.error("IMAP error:", err);
+            cleanup();
             reject(err);
         });
-        console.log("before imap.connect");
-        imap.connect();
-        console.log("after imap.connect");
+
+        imap.once('end', () => {
+            console.log("IMAP connection ended");
+            isConnectionEnded = true;
+        });
+
+        // Connect with error handling
+        try {
+            imap.connect();
+        } catch (err) {
+            console.error("Connection error:", err);
+            cleanup();
+            reject(err);
+        }
     });
-    console.log("end of function");
 }
 
 
