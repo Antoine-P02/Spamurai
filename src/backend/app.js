@@ -56,16 +56,23 @@ async function fetchAllUnreadEmails() {
     
     const imap = new Imap({
         ...imapConfig,
-        connTimeout: 30000, // Connection timeout after 10 seconds
-        authTimeout: 30000,  // Auth timeout after 5 seconds
+        connTimeout: 10000,    // Reduced timeout
+        authTimeout: 5000,     // Reduced timeout
+        debug: (info) => console.log('IMAP Debug:', info)  // More detailed debugging
     });
 
     return new Promise((resolve, reject) => {
         let isConnectionEnded = false;
+        let connectionTimeout = setTimeout(() => {
+            console.error("Connection timeout - forcing cleanup");
+            cleanup();
+            reject(new Error("Connection timeout after 15 seconds"));
+        }, 15000);
 
         const cleanup = () => {
             if (!isConnectionEnded) {
                 isConnectionEnded = true;
+                clearTimeout(connectionTimeout);
                 try {
                     imap.end();
                 } catch (err) {
@@ -74,15 +81,26 @@ async function fetchAllUnreadEmails() {
             }
         };
 
-        // Handle connection events
         imap.once('ready', () => {
-            console.log("IMAP client is ready.");
+            clearTimeout(connectionTimeout); // Clear the timeout once we're ready
+            console.log("IMAP client is ready, opening INBOX...");
+            
+            // Set a new timeout for the box opening operation
+            connectionTimeout = setTimeout(() => {
+                console.error("Box opening timeout - forcing cleanup");
+                cleanup();
+                reject(new Error("Box opening timeout after 10 seconds"));
+            }, 10000);
+
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
                     console.error("Error opening INBOX:", err);
                     cleanup();
                     return reject(err);
                 }
+
+                clearTimeout(connectionTimeout);
+                console.log("INBOX opened successfully, searching for unread...");
 
                 imap.search(['UNSEEN'], (err, results) => {
                     if (err) {
@@ -139,6 +157,7 @@ async function fetchAllUnreadEmails() {
                     });
 
                     fetch.once('end', () => {
+                        console.log("Fetch completed, cleaning up...");
                         cleanup();
                         resolve(emails);
                     });
@@ -159,7 +178,7 @@ async function fetchAllUnreadEmails() {
             isConnectionEnded = true;
         });
 
-        // Connect with error handling
+        console.log("Initiating IMAP connection...");
         try {
             imap.connect();
         } catch (err) {
