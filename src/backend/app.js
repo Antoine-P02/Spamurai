@@ -63,7 +63,7 @@ async function fetchAllUnreadEmails() {
             console.error("❌ Global timeout reached - closing connection");
             imap.end();
             reject(new Error("Operation timed out after 30 seconds"));
-        }, 30000);
+        }, 600000);
 
         console.log("📦 IMAP promise initialized");
 
