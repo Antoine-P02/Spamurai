@@ -14,7 +14,6 @@ const config = require('./config');
 const Imap = require('imap');
 const OpenAI = require('openai');
 const nodemailer = require('nodemailer');
-const { keep } = require('googleapis/build/src/apis/keep');
 
 const PORT = config.port || 4040;
 const app = express();
@@ -30,8 +29,7 @@ const imapConfig = {
     host: 'imap.gmail.com',
     port: 993,
     tls: true,
-    tlsOptions: { rejectUnauthorized: false },
-    keepalive: true,
+    tlsOptions: { rejectUnauthorized: false }
 };
 
 function formatDateWithOffset(isoDateString) {
