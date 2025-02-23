@@ -48,70 +48,56 @@ function formatDateWithOffset(isoDateString) {
 async function fetchAllUnreadEmails() {
     console.log("Starting to fetch all unread emails...");
 
-    // Create IMAP instance with timeout options
+    /*
     const imap = new Imap({
         ...imapConfig,
-        connTimeout: 20000, // Connection timeout after 10 seconds
-        authTimeout: 15000,  // Auth timeout after 5 seconds
+        connTimeout: 30000, // Connection timeout after 10 seconds
+        authTimeout: 30000,  // Auth timeout after 5 seconds
     });
+    */
 
-    console.log("imap const created");
+    const imap = new Imap(imapConfig);
 
     return new Promise((resolve, reject) => {
         console.log("object created");
-        const globalTimeout = setTimeout(() => {
-            console.error("❌ Global timeout reached - closing connection");
-            imap.end();
-            reject(new Error("Operation timed out after 30 seconds"));
-        }, 600000);
-
-        console.log("📦 IMAP promise initialized");
-
-        const cleanup = () => {
-            clearTimeout(globalTimeout);
-            imap.end();
-        };
 
         imap.once('ready', () => {
             console.log("IMAP client is ready.");
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
-                    console.error("❌ Error opening INBOX:", err);
-                    cleanup();
+                    console.log("Ending imap connection...");
+                    imap.end();
                     return reject(err);
                 }
                 console.log("INBOX opened successfully.");
 
                 imap.search(['UNSEEN'], (err, results) => {
                     if (err) {
-                        console.error("❌ Error searching for unseen emails:", err);
-                        cleanup();
+                        console.log("Error in searching for unseen emails:", err);
+                        imap.end();
                         return reject(err);
                     }
                     console.log(`Found ${results.length} unseen emails.`);
 
                     if (results.length === 0) {
                         console.log("ℹ️ No unseen emails found");
-                        cleanup();
+                        imap.end();
                         return resolve([]);
                     }
 
                     console.log(`📨 Found ${results.length} unseen emails`);
-                    const emails = [];
-                    let completed = 0;
 
+                    const emails = [];
                     const fetch = imap.fetch(results, {
                         bodies: ['HEADER', 'TEXT'],
                         struct: true
                     });
 
                     fetch.on('message', (msg, seqno) => {
-                        console.log(`⏳ Processing message #${seqno}`);
                         let email = { seqno };
 
                         msg.on('attributes', (attrs) => {
                             email.uid = attrs.uid;
-                            console.log(`📝 Got attributes for #${seqno} (UID: ${attrs.uid})`);
                         });
 
                         msg.on('body', (stream, info) => {
@@ -122,63 +108,43 @@ async function fetchAllUnreadEmails() {
                             stream.on('end', () => {
                                 if (info.which === 'TEXT') {
                                     email.body = buffer;
-                                    console.log(`Email body fetched for UID ${email.uid}`);
                                 } else {
                                     email.headers = Imap.parseHeader(buffer);
-                                    console.log(`Email headers fetched for UID ${email.uid}`);
                                 }
-                                console.log(`📄 Parsed ${info.which} for #${seqno}`);
                             });
                         });
 
                         msg.once('end', () => {
                             emails.push(email);
-                            completed++;
-                            console.log(`✅ Message #${seqno} complete (${completed}/${results.length})`);
-
-                            // Mark as seen
                             imap.addFlags(email.uid, ['\\Seen'], (err) => {
-                                if (err) console.error(`Error marking UID ${email.uid} as seen:`, err);
+                                if (err) console.error(`Erreur marquage UID ${email.uid}:`, err);
                             });
-
-                            if (completed === results.length) {
-                                console.log("🎉 All messages processed");
-                                cleanup();
-                                resolve(emails);
-                            }
                         });
                     });
 
                     fetch.once('error', (err) => {
-                        console.error("❌ Fetch error:", err);
-                        cleanup();
+                        imap.end();
                         reject(err);
+                    });
+
+                    fetch.once('end', () => {
+                        imap.end();
+                        resolve(emails);
                     });
                 });
             });
         });
 
         imap.once('error', (err) => {
-            console.error("IMAP client error:", err);
-            cleanup();
+            imap.end();
             reject(err);
         });
 
-        imap.once('end', () => {
-            console.log("👋 IMAP connection ended");
-        });
-
-        // Connect with error handling
-        try {
-            console.log("🔌 Initiating IMAP connection...");
-            imap.connect();
-        } catch (err) {
-            console.error("❌ Connection error:", err);
-            cleanup();
-            reject(err);
-        }
+        imap.connect();
     });
 }
+
+
 
 function checkEmails(emails) {
     console.log('\n=== Lecture des nouveaux mails ===');
@@ -298,16 +264,21 @@ async function fetchNew() {
     console.log(" Relance du code ");
 
     try {
-        const emails = await fetchAllUnreadEmails();
-        console.log("Emails fetched successfully" + emails);
+        const emails = fetchAllUnreadEmails();
+        emails.then((result) => {
+            console.log("Emails fetched successfully", result);
 
-        if (emails.length === 0) {
-            console.log('Pas de nouveau mail');
+            if (result.length === 0) {
+                console.log('Pas de nouveau mail');
 
-        } else {
-            console.log("We have new emails");
-            checkEmails(emails);
-        }
+            } 
+            else {
+                console.log("We have new emails");
+                checkEmails(result);
+            }
+        }).catch((error) => {
+            console.error('Error fetching emails in loop:', error);
+        });
     }
     catch (error) {
         console.error('Error fetching emails:', error);
