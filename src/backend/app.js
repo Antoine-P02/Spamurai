@@ -63,16 +63,10 @@ async function fetchAllUnreadEmails() {
 
     return new Promise((resolve, reject) => {
         let isConnectionEnded = false;
-        let connectionTimeout = setTimeout(() => {
-            console.error("Connection timeout - forcing cleanup");
-            cleanup();
-            reject(new Error("Connection timeout after 15 seconds"));
-        }, 15000);
 
         const cleanup = () => {
             if (!isConnectionEnded) {
                 isConnectionEnded = true;
-                clearTimeout(connectionTimeout);
                 try {
                     imap.end();
                 } catch (err) {
@@ -81,17 +75,9 @@ async function fetchAllUnreadEmails() {
             }
         };
 
+        // Handle connection events
         imap.once('ready', () => {
-            clearTimeout(connectionTimeout); // Clear the timeout once we're ready
-            console.log("IMAP client is ready, opening INBOX...");
-            
-            // Set a new timeout for the box opening operation
-            connectionTimeout = setTimeout(() => {
-                console.error("Box opening timeout - forcing cleanup");
-                cleanup();
-                reject(new Error("Box opening timeout after 10 seconds"));
-            }, 10000);
-
+            console.log("IMAP client is ready.");
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
                     console.error("Error opening INBOX:", err);
@@ -99,9 +85,7 @@ async function fetchAllUnreadEmails() {
                     return reject(err);
                 }
 
-                clearTimeout(connectionTimeout);
                 console.log("INBOX opened successfully, searching for unread...");
-
                 imap.search(['UNSEEN'], (err, results) => {
                     if (err) {
                         console.error("Error searching for unseen emails:", err);
@@ -109,6 +93,7 @@ async function fetchAllUnreadEmails() {
                         return reject(err);
                     }
 
+                    console.log(`Found ${results.length} unseen emails`);
                     if (results.length === 0) {
                         console.log("No unseen emails found");
                         cleanup();
@@ -122,6 +107,7 @@ async function fetchAllUnreadEmails() {
                     });
 
                     fetch.on('message', (msg, seqno) => {
+                        console.log(`Processing message #${seqno}`);
                         let email = { seqno };
 
                         msg.on('attributes', (attrs) => {
@@ -144,6 +130,7 @@ async function fetchAllUnreadEmails() {
 
                         msg.once('end', () => {
                             emails.push(email);
+                            console.log(`Email #${seqno} processed:`, email);
                             imap.addFlags(email.uid, ['\\Seen'], (err) => {
                                 if (err) console.error(`Error marking UID ${email.uid} as seen:`, err);
                             });
