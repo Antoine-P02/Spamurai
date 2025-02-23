@@ -369,7 +369,7 @@ app.post("/webhook/gmail", async (req, res) => {
 
     if (!message || !message.data) {
         console.log("No message data found");
-        return;
+        return res.status(200).send("No message data found");
     }
 
     // Decode the Base64 encoded message data
@@ -378,9 +378,13 @@ app.post("/webhook/gmail", async (req, res) => {
         Buffer.from(encodedMessage, "base64").toString("utf-8")
     );
     console.log("Decoded Message: ", decodedMessage, "\n\n");
-    await fetchNew();
-
     res.status(200).send("ok");
+    
+    fetchNew().catch((error) => {
+        console.log("Error processing emails asynchronously:", error);
+    }
+    );
+
 });
 
 
