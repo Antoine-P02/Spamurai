@@ -208,7 +208,7 @@ function checkEmails(emails) {
 }
 
 async function send_email(result, from, subject) {
-
+    console.log("Envoi de l'email...");
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -223,6 +223,7 @@ async function send_email(result, from, subject) {
         subject: `SPAMURAI Phishing Analysis : ${subject}`,
         text: result
     };
+    console.log("about to try");
 
     try {
         const response = await transporter.sendMail(mailOptions);
