@@ -134,14 +134,16 @@ async function fetchAllUnreadEmails() {
                 });
             });
         });
-
+        console.log("before imap.once error");
         imap.once('error', (err) => {
             imap.end();
             reject(err);
         });
-
+        console.log("before imap.connect");
         imap.connect();
+        console.log("after imap.connect");
     });
+    console.log("end of function");
 }
 
 
