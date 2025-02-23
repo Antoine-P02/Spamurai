@@ -65,7 +65,7 @@ async function fetchAllUnreadEmails() {
             console.error("❌ Global timeout reached - closing connection");
             imap.end();
             reject(new Error("Operation timed out after 30 seconds"));
-        }, 10000);
+        }, 30000);
 
         console.log("📦 IMAP promise initialized");
 
@@ -210,7 +210,7 @@ function checkEmails(emails) {
 }
 
 async function send_email(result, from, subject) {
-
+    console.log(`Attempting to send email to: ${from} with subject: ${subject}`);
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
