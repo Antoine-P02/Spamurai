@@ -135,7 +135,7 @@ async function fetchAllUnreadEmails() {
                             emails.push(email);
                             completed++;
                             console.log(`✅ Message #${seqno} complete (${completed}/${results.length})`);
-                            
+
                             // Mark as seen
                             imap.addFlags(email.uid, ['\\Seen'], (err) => {
                                 if (err) console.error(`Error marking UID ${email.uid} as seen:`, err);
@@ -208,7 +208,7 @@ function checkEmails(emails) {
 }
 
 async function send_email(result, from, subject) {
-    console.log(`Attempting to send email to: ${from} with subject: ${subject}`);
+
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -303,9 +303,9 @@ async function fetchNew() {
         if (emails.length === 0) {
             console.log('Pas de nouveau mail');
 
-        } else { 
+        } else {
             console.log("We have new emails");
-            checkEmails(emails); 
+            checkEmails(emails);
         }
     }
     catch (error) {
@@ -369,7 +369,7 @@ app.post("/webhook/gmail", async (req, res) => {
 
     if (!message || !message.data) {
         console.log("No message data found");
-        return res.status(200).send("No message data found");
+        return;
     }
 
     // Decode the Base64 encoded message data
@@ -378,13 +378,9 @@ app.post("/webhook/gmail", async (req, res) => {
         Buffer.from(encodedMessage, "base64").toString("utf-8")
     );
     console.log("Decoded Message: ", decodedMessage, "\n\n");
-    res.status(200).send("ok");
-    
-    fetchNew().catch((error) => {
-        console.log("Error processing emails asynchronously:", error);
-    }
-    );
+    await fetchNew();
 
+    res.status(200).send("ok");
 });
 
 
@@ -398,7 +394,7 @@ app.get('/api/get/emails', async (req, res) => {
         await fetchNew();
         console.log("Emails fetched successfully");
         res.send("Emails fetched successfully");
-    } 
+    }
     catch (error) {
         console.error('Error fetching emails:', error);
         res.send("Error fetching emails : " + error.message);
@@ -438,5 +434,3 @@ app.use((err, req, res, next) => {
 app.use((req, res) => {
     res.status(404).send('404: Page not found');
 });
-
-
