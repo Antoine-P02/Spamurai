@@ -369,7 +369,7 @@ app.post("/webhook/gmail", async (req, res) => {
 
     if (!message || !message.data) {
         console.log("No message data found");
-        return res.status(200).send("No message data found");
+        return;
     }
 
     // Decode the Base64 encoded message data
@@ -378,13 +378,23 @@ app.post("/webhook/gmail", async (req, res) => {
         Buffer.from(encodedMessage, "base64").toString("utf-8")
     );
     console.log("Decoded Message: ", decodedMessage, "\n\n");
-    res.status(200).send("ok");
 
-    fetchNew().catch((error) => {
-        console.log("Error processing emails asynchronously:", error);
+    try {
+        // Send immediate response to Gmail
+
+        // Make HTTP request to our GET endpoint
+        const fetch = await import('node-fetch');
+        const response = await fetch.default("https://spamurai-analysis.vercel.app/api/get/emails");
+
+        if (!response.ok) {
+            throw new Error(`GET request failed: ${response.status}`);
+        }
+
+        console.log("Email processing triggered via GET endpoint");
+    } catch (error) {
+        console.error("Error triggering email processing:", error);
     }
-    );
-
+    res.status(200).send("ok");
 });
 
 
@@ -396,8 +406,10 @@ app.get('/', async (req, res) => {
 app.get('/api/get/emails', async (req, res) => {
     try {
         await fetchNew();
-        console.log("Emails fetched successfully");
-        res.send("Emails fetched successfully" + emails);
+        res.send("Emails fetched successfully");
+        //const emails = await fetchAllUnreadEmails();
+        //console.log("Emails fetched successfully" + emails);
+        //res.send("Emails fetched successfully" + emails);
     }
     catch (error) {
         console.error('Error fetching emails:', error);
