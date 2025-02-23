@@ -180,31 +180,38 @@ async function fetchAllUnreadEmails() {
     });
 }
 
-function checkEmails(emails) {
+async function checkEmails(emails) {
     console.log('\n=== Lecture des nouveaux mails ===');
-    emails.forEach(async (email, index) => {
-        const { originalSender, forwarder } = getEmailSenders(email.headers, email.body);
-        const object = email.headers.subject[0];
-        const content = email.body;
+    
+    // Change forEach to for...of to properly handle async operations
+    for (const email of emails) {
+        try {
+            const { originalSender, forwarder } = getEmailSenders(email.headers, email.body);
+            const object = email.headers.subject[0];
+            const content = email.body;
 
-        console.log("Original sender: " + originalSender + "/ Forwarded by: " + forwarder + " / Subject: " + object);
+            console.log("Original sender: " + originalSender + "/ Forwarded by: " + forwarder + " / Subject: " + object);
 
-        if (originalSender === forwarder) { // Skip emails that are not forwarded
-            console.log('Email non-forwarded, skipping...');
-            return;
-        }
-
-        const completion = chatgptouille(originalSender, forwarder, object, content);
-        await completion.then((result) => {
-
-            if (result != false) {
-                const message = result.choices[0].message.content; // Stocke le résultat dans une variable
-                console.log(message);
-                const text_answer = "🤖 SPAMURAI Phishing Analysis 🚀:\n" + object;
-                send_email(message, forwarder, text_answer);  // Send response to the forwarder
+            if (originalSender === forwarder) {
+                console.log('Email non-forwarded, skipping...');
+                continue;
             }
-        });
-    });
+
+            console.log("Calling chatGPT analysis...");
+            const completion = await chatgptouille(originalSender, forwarder, object, content);
+            
+            if (completion !== false) {
+                const message = completion.choices[0].message.content;
+                console.log("Analysis result:", message);
+                await send_email(message, forwarder, "🤖 SPAMURAI Phishing Analysis 🚀:\n" + object);
+                console.log("Response email sent successfully");
+            }
+        } catch (error) {
+            console.error("Error processing email:", error);
+            // Continue with next email even if one fails
+        }
+    }
+    console.log("=== Email processing completed ===");
 }
 
 async function send_email(result, from, subject) {
@@ -305,7 +312,7 @@ async function fetchNew() {
 
         } else {
             console.log("We have new emails");
-            checkEmails(emails);
+            await checkEmails(emails);
         }
     }
     catch (error) {
