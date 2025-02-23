@@ -48,24 +48,19 @@ function formatDateWithOffset(isoDateString) {
 async function fetchAllUnreadEmails() {
     console.log("Starting to fetch all unread emails...");
 
-    // Create IMAP instance with timeout options
     const imap = new Imap({
         ...imapConfig,
-        connTimeout: 20000, // Connection timeout after 10 seconds
-        authTimeout: 15000,  // Auth timeout after 5 seconds
+        connTimeout: 20000, // Connection timeout after x miliseconds
+        authTimeout: 15000,  // Auth after x miliseconds
     });
 
-    console.log("imap const created");
 
     return new Promise((resolve, reject) => {
-        console.log("object created");
         const globalTimeout = setTimeout(() => {
-            console.error("❌ Global timeout reached - closing connection");
+            console.log("Global timeout reached - closing connection");
             imap.end();
             reject(new Error("Operation timed out after 30 seconds"));
         }, 30000);
-
-        console.log("📦 IMAP promise initialized");
 
         const cleanup = () => {
             clearTimeout(globalTimeout);
@@ -73,7 +68,6 @@ async function fetchAllUnreadEmails() {
         };
 
         imap.once('ready', () => {
-            console.log("IMAP client is ready.");
             imap.openBox('INBOX', false, (err, box) => {
                 if (err) {
                     console.error("❌ Error opening INBOX:", err);
@@ -106,12 +100,10 @@ async function fetchAllUnreadEmails() {
                     });
 
                     fetch.on('message', (msg, seqno) => {
-                        console.log(`⏳ Processing message #${seqno}`);
                         let email = { seqno };
 
                         msg.on('attributes', (attrs) => {
                             email.uid = attrs.uid;
-                            console.log(`📝 Got attributes for #${seqno} (UID: ${attrs.uid})`);
                         });
 
                         msg.on('body', (stream, info) => {
@@ -122,19 +114,15 @@ async function fetchAllUnreadEmails() {
                             stream.on('end', () => {
                                 if (info.which === 'TEXT') {
                                     email.body = buffer;
-                                    console.log(`Email body fetched for UID ${email.uid}`);
                                 } else {
                                     email.headers = Imap.parseHeader(buffer);
-                                    console.log(`Email headers fetched for UID ${email.uid}`);
                                 }
-                                console.log(`📄 Parsed ${info.which} for #${seqno}`);
                             });
                         });
 
                         msg.once('end', () => {
                             emails.push(email);
                             completed++;
-                            console.log(`✅ Message #${seqno} complete (${completed}/${results.length})`);
 
                             // Mark as seen
                             imap.addFlags(email.uid, ['\\Seen'], (err) => {
@@ -165,15 +153,15 @@ async function fetchAllUnreadEmails() {
         });
 
         imap.once('end', () => {
-            console.log("👋 IMAP connection ended");
+            console.log("IMAP connection ended");
         });
 
         // Connect with error handling
         try {
-            console.log("🔌 Initiating IMAP connection...");
+            console.log("Initiating IMAP connection...");
             imap.connect();
         } catch (err) {
-            console.error("❌ Connection error:", err);
+            console.error("Connection error:", err);
             cleanup();
             reject(err);
         }
