@@ -186,7 +186,7 @@ async function checkEmails(emails) {
             }
 
             console.log("Calling chatGPT analysis...");
-            const completion = await chatgptouille(originalSender, forwarder, object, content);
+            const completion = await analysis_LLM(originalSender, forwarder, object, content);
             
             if (completion !== false) {
                 const message = completion.choices[0].message.content;
@@ -261,7 +261,7 @@ function extractContent(html) {
     return dom.window.document.body.textContent || '';
 }
 
-async function chatgptouille(originalSender, forwarder, object, content) {
+async function analysis_LLM(originalSender, forwarder, object, content) {
     mail_size = originalSender.length + object.length + extractContent(content).length;
     console.log("mail size : " + mail_size);
 
@@ -280,7 +280,36 @@ async function chatgptouille(originalSender, forwarder, object, content) {
         model: "gpt-4o-mini",
         store: false,
         messages: [
-            { "role": "user", "content": `Peux-tu donner ton taux de certitude sur 100 si ce mail est du phishing ou non : - mail venant de l'adresse : ${originalSender} - objet du mail : ${object} - contenu : ${content} ` },
+            {
+                "role": "user", "content": `You are a highly skilled cybersecurity expert with years of experience in threat detection and email security. The stakes for this analysis are extremely high—any oversight could lead to severe financial losses, data breaches, or compromised personal information. Your task is to analyze the following forwarded email thoroughly to determine whether it is a phishing attempt.
+
+You must take into account several crucial factors:
+
+Original Sender Analysis:
+
+Analyze the sender’s email address for suspicious elements.
+Check for unusual domain names, excessive numbers, strange characters, or misspellings of trusted organizations (e.g., "g00gle.com" instead of "google.com").
+Keep in mind that not all no-reply accounts are malicious—legitimate companies often use these.
+Subject Line Evaluation:
+
+Examine the subject for urgency tactics (e.g., “Immediate Action Required”, “Account Suspension Notice”).
+Look for emotional manipulation, financial bait, or threats that push the recipient to act quickly without thinking.
+Content Examination:
+
+Check for spelling, grammatical errors, or awkward phrasing often found in phishing emails.
+Detect any request for sensitive information like passwords, Social Security numbers, banking details, or security codes.
+Identify suspicious links or attachments—check if the displayed URL matches the actual destination when hovered over.
+Psychological Manipulation Detection:
+
+Be aware of fear-based messaging or false authority (e.g., emails claiming to be from CEOs, government officials, or banks).
+Contextual Red Flags:
+
+Determine if the email is unexpected or irrelevant to the recipient’s typical communications.
+Evaluate if the content seems out of character for the supposed sender, especially if it's from a trusted source.
+Urgency and Consequences:
+
+Detect pressure tactics implying severe consequences if immediate action isn’t taken.
+Treat this analysis with the highest level of scrutiny—consider every possibility, as if a successful phishing attack could result in catastrophic damage. Ensure that all suspicious elements are identified and evaluated thoroughly. \nInputs : \n- originalSender ${originalSender} \n- subject : ${object} \n- content ${content}  At the end of your analysis, only return a score out of 100 indicating how likely this email is to be a phishing attempt—where 0 means "definitely not phishing" and 100 means "certainly phishing."` },
         ],
     });
 
